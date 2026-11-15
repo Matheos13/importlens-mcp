@@ -25,7 +25,7 @@ uvx pyscope            # run straight from PyPI, no install
 pip install pyscope
 ```
 
-Add it to your agent. For **Claude Code**:
+Add it to your agent. For(what I use) **Claude Code**:
 
 ```bash
 claude mcp add pyscope -- uvx pyscope
