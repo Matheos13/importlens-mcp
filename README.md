@@ -1,5 +1,8 @@
 # importlens-mcp
 
+[![PyPI version](https://img.shields.io/pypi/v/importlens-mcp.svg)](https://pypi.org/project/importlens-mcp/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Matheos13/importlens-mcp/blob/main/LICENSE)
+
 **Stop feeding your coding agent the whole repo. Feed it the files that actually matter.**
 
 importlens-mcp is a tiny [MCP](https://modelcontextprotocol.io) server that reads your Python project's *import graph* and hands your agent only the slice of code relevant to what it's working on — the file that defines a symbol, the files that use it, and the files it depends on. No embeddings, no vector DB, no re-reading the tree on every question.
