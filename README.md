@@ -94,6 +94,21 @@ importlens-mcp: 4 files, 4 modules, 10 symbols, 371 lines
 
 Import resolution is best-effort and handles `src/` layouts and relative imports. It won't catch dynamic imports or runtime magic — and that's a fine tradeoff for a v0.
 
+## Benchmark
+
+Measured on two real repos. **tokens without** = all source `.py` files the agent would have to read to find context on its own. **tokens with** = only the files `relevant_files(symbol)` returns. Token estimate: `len(source) // 4`.
+
+| repo | task | tokens without | tokens with | % saved |
+|------|------|---------------:|------------:|--------:|
+| trading-bot | add position-sizing floor | 8,187 | 5,255 | 36% |
+| trading-bot | debug run-loop signal handling | 8,187 | 4,794 | 41% |
+| trading-bot | add Sharpe/Sortino tracking | 8,187 | 4,625 | 44% |
+| httpx | implement OAuth2 auth flow | 71,089 | 36,062 | 49% |
+| httpx | add per-request timeout override | 71,089 | 42,838 | 40% |
+| httpx | fix multipart boundary encoding | 71,089 | 18,487 | 74% |
+
+Rerun with `python benchmarks/bench.py` (httpx needs `git clone --depth=1 https://github.com/encode/httpx /tmp/httpx` first).
+
 ## Roadmap
 
 - [ ] call-graph edges (who calls this function), not just imports
