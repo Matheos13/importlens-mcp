@@ -28,7 +28,7 @@ uvx importlens-mcp            # run straight from PyPI, no install
 pip install importlens-mcp
 ```
 
-Add it to your agent. For(what I use) **Claude Code**:
+Add it to your agent. For **Claude Code**:
 
 ```bash
 claude mcp add importlens-mcp -- uvx importlens-mcp
@@ -114,23 +114,23 @@ Four strategies compared on two real repos. Token estimate: `len(source) // 4`.
 
 - **all files** — every source `.py` file (worst-case baseline)
 - **grep full files** — files whose text contains the symbol name, plus their direct local imports, all read in full (naive agent behaviour)
-- **grep -C3** — fairer smart-grep: defining file read in full, every other mentioning file as a 3-line-context snippet (what a careful agent would actually do)
-- **importlens** — what `relevant_files()` returns: defining file + local imports in full, dependent files as call-site snippets (2 lines before + 3 after each match)
+- **grep -C3** — fairer smart-grep baseline: defining file read in full, every other mentioning file as a 3-line-context snippet
+- **importlens** — what `relevant_files()` returns: defining file in full, local imports as signatures (def/class lines + first docstring line, no bodies), dependent files as call-site snippets
 
 | repo | symbol | all files | grep full files | grep -C3 | importlens | % saved vs grep -C3 |
 |------|--------|----------:|----------------:|---------:|-----------:|--------------------:|
-| trading-bot | `RiskManager` | 8,187 | 7,884 | 912 | 842 | +8% |
-| trading-bot | `TradingBot` | 8,187 | 7,884 | 1,821 | 3,630 | −99% |
-| trading-bot | `BacktestEngine` | 8,187 | 7,884 | 1,557 | 2,886 | −85% |
-| httpx | `DigestAuth` | 71,089 | 53,965 | 3,017 | 18,377 | −509% |
-| httpx | `Timeout` | 71,089 | 61,102 | 3,045 | 19,799 | −550% |
-| httpx | `MultipartStream` | 71,089 | 9,436 | 2,603 | 5,403 | −108% |
-| httpx | `Client` | 71,089 | 65,077 | 17,514 | 51,865 | −196% |
-| httpx | `Request` | 71,089 | 66,452 | 16,113 | 33,897 | −110% |
+| trading-bot | `RiskManager` | 7,504 | 7,201 | 911 | 839 | +8% |
+| trading-bot | `TradingBot` | 7,504 | 7,201 | 1,138 | 1,675 | −47% |
+| trading-bot | `BacktestEngine` | 7,504 | 7,201 | 1,557 | 1,930 | −24% |
+| httpx | `DigestAuth` | 71,089 | 53,965 | 3,017 | 6,706 | −122% |
+| httpx | `Timeout` | 71,089 | 61,102 | 3,045 | 6,256 | −105% |
+| httpx | `MultipartStream` | 71,089 | 9,436 | 2,603 | 2,952 | −13% |
+| httpx | `Client` | 71,089 | 65,077 | 17,514 | 24,190 | −38% |
+| httpx | `Request` | 71,089 | 66,452 | 16,113 | 18,729 | −16% |
 
-**Honest take:** importlens beats grep -C3 only when the symbol is well-isolated — `RiskManager` wins by 8% because grep matches many files that happen to mention the name, while importlens knows exactly which file defines it. For everything else importlens is more expensive, because it insists on reading the full defining file *and all its local imports*, not just snippets.
+**Honest take:** switching local imports from full files to signatures (v0.3) cut the gap dramatically — `MultipartStream` went from −108% to −13%, `Request` from −110% to −16%, and the trading-bot symbols are now within striking distance of grep -C3. Importlens still costs more tokens on most symbols because it insists on the full defining file while grep -C3 only shows snippets of it too.
 
-That cost is intentional. Grep -C3 gives you fragments: enough to see call sites, not enough to safely modify the implementation. Importlens gives you the full understanding cone — the implementation plus everything it depends on — so your agent can reason about the code rather than just locate it. If you only need to know where `Timeout` is called, grep -C3 is cheaper. If you need to change how it works, the extra tokens pay for themselves.
+That tradeoff is intentional: signatures give your agent the full interface of every dependency (what methods exist, what they accept, what they return) without the implementation noise. Grep -C3 gives you fragments — enough to locate something, not enough to safely change it. `RiskManager` wins outright; `MultipartStream` and `Request` are essentially ties. The remaining gap on `DigestAuth` and `Timeout` comes from their defining files having large local import chains that contribute substantial signatures.
 
 Rerun with `python benchmarks/bench.py` (httpx needs `git clone --depth=1 https://github.com/encode/httpx /tmp/httpx` first).
 

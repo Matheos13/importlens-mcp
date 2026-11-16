@@ -1,6 +1,6 @@
 [project]
 name = "importlens-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Import-aware context for coding agents on Python repos. Feeds your agent only the files that matter, not the whole repo."
 readme = "README.md"
 requires-python = ">=3.10"

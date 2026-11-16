@@ -41,7 +41,7 @@ from dataclasses import dataclass
 # Allow running from the project root without installing the package
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from importlens_mcp.graph import CodeIndex, call_sites  # noqa: E402
+from importlens_mcp.graph import CodeIndex, call_sites, signatures  # noqa: E402
 
 
 @dataclass
@@ -125,27 +125,30 @@ def _grep_c3_tokens(root: str, idx: CodeIndex, symbol: str, src: set[str]) -> in
 def _importlens_tokens(root: str, idx: CodeIndex, symbol: str, src: set[str]) -> int:
     """Tokens for what relevant_files actually returns.
 
-    Defining files and their local imports are counted in full. Dependent files
-    are counted as call-site snippets (2 lines before + 3 after each match),
-    matching the default behaviour of relevant_files().
+    Defining files: full source.
+    Local imports: signatures only (def/class lines + first docstring line).
+    Dependent files: call-site snippets (2 lines before + 3 after each match).
     """
     defs = set(idx.find_symbol(symbol))
     if not defs:
         return 0
-    full_files: set[str] = set(defs)
+    local_imp: set[str] = set()
     dep_files: set[str] = set()
     for p in defs:
-        full_files.update(idx.local_imports(p))
+        local_imp.update(idx.local_imports(p))
         dep_files.update(idx.dependents(p))
-    full_files &= src
-    dep_files = (dep_files - full_files) & src
+    defs &= src
+    local_imp = (local_imp - defs) & src
+    dep_files = (dep_files - defs - local_imp) & src
 
     total = 0
-    for p in full_files:
+    for p in defs:
         try:
             total += len(open(os.path.join(root, p), encoding="utf-8").read())
         except OSError:
             pass
+    for p in local_imp:
+        total += len(signatures(root, p))
     for p in dep_files:
         total += len(call_sites(root, p, symbol))
     return total // 4

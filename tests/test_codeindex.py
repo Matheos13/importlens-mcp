@@ -8,7 +8,7 @@ import textwrap
 
 import pytest
 
-from importlens_mcp.graph import CodeIndex, call_sites
+from importlens_mcp.graph import CodeIndex, call_sites, signatures
 
 
 @pytest.fixture()
@@ -140,6 +140,91 @@ def test_call_sites_separator_between_distant_windows(tmp_path):
 def test_call_sites_missing_file(tmp_path):
     snippet = call_sites(str(tmp_path), "nonexistent.py", "Foo")
     assert snippet == ""
+
+
+# ---- signatures -------------------------------------------------------------
+
+@pytest.fixture()
+def sig_repo(tmp_path):
+    (tmp_path / "lib.py").write_text(textwrap.dedent("""\
+        def add(x: int, y: int) -> int:
+            \"\"\"Return the sum of x and y.\"\"\"
+            return x + y
+
+        class Counter:
+            \"\"\"A simple counter.\"\"\"
+            count: int = 0
+
+            def increment(self, by: int = 1) -> None:
+                \"\"\"Increment the counter.\"\"\"
+                self.count += by
+
+            def reset(self) -> None:
+                self.count = 0
+    """))
+    return tmp_path
+
+
+def test_signatures_includes_def_lines(sig_repo):
+    out = signatures(str(sig_repo), "lib.py")
+    assert "def add(x: int, y: int) -> int:" in out
+    assert "class Counter:" in out
+    assert "def increment(self, by: int = 1) -> None:" in out
+
+
+def test_signatures_includes_first_docstring_line(sig_repo):
+    out = signatures(str(sig_repo), "lib.py")
+    assert '"""Return the sum of x and y."""' in out
+    assert '"""A simple counter."""' in out
+    assert '"""Increment the counter."""' in out
+
+
+def test_signatures_no_body(sig_repo):
+    out = signatures(str(sig_repo), "lib.py")
+    assert "return x + y" not in out
+    assert "self.count +=" not in out
+
+
+def test_signatures_includes_field_annotations(sig_repo):
+    out = signatures(str(sig_repo), "lib.py")
+    assert "count: int = 0" in out
+
+
+def test_signatures_missing_file(sig_repo):
+    assert signatures(str(sig_repo), "nonexistent.py") == ""
+
+
+def test_signatures_no_docstring(tmp_path):
+    (tmp_path / "plain.py").write_text("def foo(x):\n    return x\n")
+    out = signatures(str(tmp_path), "plain.py")
+    assert "def foo(x):" in out
+    assert "return x" not in out
+
+
+def test_relevant_files_local_imports_show_signatures(fake_repo):
+    import importlens_mcp.server as srv
+    srv._ROOT = str(fake_repo)
+    srv._index = None
+    # utils.py defines helper; main.py imports utils — so utils is a local import of main
+    # but we look up from the defining file's perspective: Config is defined in utils.py
+    # utils.py has no local imports, so test via a symbol whose def has imports
+    # Use helper: defined in utils.py, main.py depends on it (dependent)
+    # To test local-import signatures, make a chain: use fake_repo's main.py as the def
+    result = srv.relevant_files("run")  # run is in main.py which imports utils
+    # utils.py is a local import of main.py — should appear as a signature block
+    assert "```python" in result
+    assert "def helper" in result  # signature of utils.py
+
+
+def test_relevant_files_include_full_imports(fake_repo):
+    import importlens_mcp.server as srv
+    srv._ROOT = str(fake_repo)
+    srv._index = None
+    result = srv.relevant_files("run", include_full_imports=True)
+    assert "utils.py" in result
+    # With full imports, no code block for the import — just the path
+    # (there may still be a code block for dependents, but utils appears as a path)
+    assert "- utils.py" in result
 
 
 # ---- relevant_files (server) ------------------------------------------------

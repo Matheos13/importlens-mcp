@@ -171,6 +171,59 @@ class CodeIndex:
         }
 
 
+def signatures(root: str, path: str) -> str:
+    """Return a module skeleton: def/class signatures with args + first docstring line, no bodies.
+
+    For classes, also includes method signatures and field annotations.
+    """
+    try:
+        with open(os.path.join(root, path), encoding="utf-8") as fh:
+            source = fh.read()
+    except (OSError, UnicodeDecodeError):
+        return ""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return ""
+
+    src_lines = source.splitlines()
+    out: list[str] = []
+
+    def _emit(node: ast.AST, depth: int) -> None:
+        body = node.body  # type: ignore[attr-defined]
+        lineno = node.lineno  # type: ignore[attr-defined]
+        # signature lines: from def/class keyword up to (but not including) first body stmt
+        sig_end = max(lineno, body[0].lineno - 1) if body else lineno
+        out.extend(src_lines[lineno - 1 : sig_end])
+
+        # first docstring line
+        first = body[0] if body else None
+        if (first and isinstance(first, ast.Expr)
+                and isinstance(first.value, ast.Constant)
+                and isinstance(first.value.value, str)):
+            first_doc = next(
+                (ln.strip() for ln in first.value.value.splitlines() if ln.strip()), ""
+            )
+            if first_doc:
+                out.append("    " * (depth + 1) + f'"""{first_doc}"""')
+
+        if isinstance(node, ast.ClassDef):
+            for child in body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    _emit(child, depth + 1)
+                elif isinstance(child, ast.AnnAssign):
+                    out.append(src_lines[child.lineno - 1])
+
+        if depth == 0:
+            out.append("")
+
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            _emit(node, 0)
+
+    return "\n".join(out).rstrip()
+
+
 def call_sites(root: str, path: str, symbol: str, before: int = 2, after: int = 3) -> str:
     """Return snippets from path where symbol appears, with context lines around each match.
 
