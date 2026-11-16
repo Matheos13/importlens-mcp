@@ -1,6 +1,6 @@
-"""Entry point: `pyscope` runs the MCP server over stdio.
+"""Entry point: `importlens-mcp` runs the MCP server over stdio.
 
-`pyscope map [path]` prints the project map to the terminal — handy for a
+`importlens-mcp map [path]` prints the project map to the terminal — handy for a
 quick look or a README gif without wiring up an agent.
 """
 
@@ -17,14 +17,14 @@ def main() -> None:
         root = args[1] if len(args) > 1 else "."
         idx = CodeIndex(root).build()
         s = idx.stats()
-        print(f"pyscope: {s['files']} files, {s['modules']} modules, "
+        print(f"importlens-mcp: {s['files']} files, {s['modules']} modules, "
               f"{s['symbols']} symbols, {s['total_lines']} lines")
         for mod, path in sorted(idx.module_to_path.items()):
             print(f"  {mod:<40} {path}")
         return
 
     # Default: run the MCP server. Index the cwd unless told otherwise.
-    os.environ.setdefault("PYSCOPE_ROOT", os.getcwd())
+    os.environ.setdefault("IMPORTLENS_ROOT", os.getcwd())
     from .server import run
     run()
 

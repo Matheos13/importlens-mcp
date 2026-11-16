@@ -1,17 +1,17 @@
-# pyscope
+# importlens-mcp
 
 **Stop feeding your coding agent the whole repo. Feed it the files that actually matter.**
 
-pyscope is a tiny [MCP](https://modelcontextprotocol.io) server that reads your Python project's *import graph* and hands your agent only the slice of code relevant to what it's working on — the file that defines a symbol, the files that use it, and the files it depends on. No embeddings, no vector DB, no re-reading the tree on every question.
+importlens-mcp is a tiny [MCP](https://modelcontextprotocol.io) server that reads your Python project's *import graph* and hands your agent only the slice of code relevant to what it's working on — the file that defines a symbol, the files that use it, and the files it depends on. No embeddings, no vector DB, no re-reading the tree on every question.
 
 ```
-npx-style one-liner for python:  uvx pyscope
+npx-style one-liner for python:  uvx importlens-mcp
 ```
 
-> **Why:** on a big repo, agents burn tokens (and get confused) re-reading files that have nothing to do with the task. pyscope answers *"which files matter for `UserService`?"* in one call, using nothing but Python's own `ast`.
+> **Why:** on a big repo, agents burn tokens (and get confused) re-reading files that have nothing to do with the task. importlens-mcp answers *"which files matter for `UserService`?"* in one call, using nothing but Python's own `ast`.
 
 <!-- TODO: drop a 10-second demo gif here before launch -->
-![demo](docs/demo.gif)
+![demo](https://raw.githubusercontent.com/Matheos13/importlens-mcp/main/docs/demo.gif)
 
 ---
 
@@ -19,19 +19,19 @@ npx-style one-liner for python:  uvx pyscope
 
 ```bash
 # with uv (recommended)
-uvx pyscope            # run straight from PyPI, no install
+uvx importlens-mcp            # run straight from PyPI, no install
 
 # or pip
-pip install pyscope
+pip install importlens-mcp
 ```
 
 Add it to your agent. For(what I use) **Claude Code**:
 
 ```bash
-claude mcp add pyscope -- uvx pyscope
+claude mcp add importlens-mcp -- uvx importlens-mcp
 ```
 
-For any MCP client, point it at the `pyscope` command (stdio transport). It indexes the current working directory by default, or set `PYSCOPE_ROOT`.
+For any MCP client, point it at the `importlens-mcp` command (stdio transport). It indexes the current working directory by default, or set `IMPORTLENS_ROOT`.
 
 ## What your agent gets
 
@@ -56,11 +56,11 @@ relevant_files("CodeIndex")
 # Relevant files for `CodeIndex`
 
 ## Defined in
-- src/pyscope/graph.py
+- src/importlens_mcp/graph.py
 
 ## Used by (dependents)
-- src/pyscope/__main__.py
-- src/pyscope/server.py
+- src/importlens_mcp/__main__.py
+- src/importlens_mcp/server.py
 
 ## Depends on (local imports)
 - (none)
@@ -71,14 +71,14 @@ Three files instead of thirty. That's the whole idea.
 ## Quick look without an agent
 
 ```bash
-pyscope map .
+importlens-mcp map .
 ```
 
 ```
-pyscope: 4 files, 4 modules, 10 symbols, 371 lines
-  pyscope           src/pyscope/__init__.py
-  pyscope.graph     src/pyscope/graph.py
-  pyscope.server    src/pyscope/server.py
+importlens-mcp: 4 files, 4 modules, 10 symbols, 371 lines
+  importlens_mcp           src/importlens_mcp/__init__.py
+  importlens_mcp.graph     src/importlens_mcp/graph.py
+  importlens_mcp.server    src/importlens_mcp/server.py
   ...
 ```
 

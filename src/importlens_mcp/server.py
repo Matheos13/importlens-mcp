@@ -1,4 +1,4 @@
-"""pyscope MCP server.
+"""importlens-mcp MCP server.
 
 Exposes a handful of tools that let a coding agent pull *just* the relevant
 slice of a Python repo into context, instead of re-reading the whole tree.
@@ -22,9 +22,9 @@ try:
 except ModuleNotFoundError:  # pragma: no cover - depends on installed version
     from mcp.server.fastmcp import FastMCP as _Server      # SDK v1
 
-mcp = _Server("pyscope")
+mcp = _Server("importlens-mcp")
 
-_ROOT = os.environ.get("PYSCOPE_ROOT", os.getcwd())
+_ROOT = os.environ.get("IMPORTLENS_ROOT", os.getcwd())
 _index: CodeIndex | None = None
 
 
@@ -131,7 +131,7 @@ def file_context(path: str) -> str:
     loading the whole project.
 
     Args:
-        path: repo-relative path, e.g. "src/pyscope/server.py".
+        path: repo-relative path, e.g. "src/importlens_mcp/server.py".
     """
     idx = _get_index()
     deps = idx.local_imports(path)

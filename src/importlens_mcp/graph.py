@@ -23,7 +23,7 @@ IGNORE_DIRS = {
 class FileInfo:
     """What we learned from one .py file."""
     path: str                       # repo-relative path, posix style
-    module: str                     # dotted module name, e.g. pyscope.graph
+    module: str                     # dotted module name, e.g. importlens_mcp.graph
     defines: set[str] = field(default_factory=set)   # top-level func/class names
     imports: set[str] = field(default_factory=set)   # dotted modules it imports
     lines: int = 0
