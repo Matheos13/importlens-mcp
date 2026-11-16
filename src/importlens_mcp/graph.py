@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import os
+import re
 from dataclasses import dataclass, field
 
 # Directories we never want to crawl. These are noise for an agent.
@@ -168,3 +169,42 @@ class CodeIndex:
             "symbols": len(self.symbol_to_paths),
             "total_lines": sum(f.lines for f in self.files.values()),
         }
+
+
+def call_sites(root: str, path: str, symbol: str, before: int = 2, after: int = 3) -> str:
+    """Return snippets from path where symbol appears, with context lines around each match.
+
+    Returns empty string if the symbol is not found in the file.
+    """
+    try:
+        with open(os.path.join(root, path), encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+    pat = re.compile(r"\b" + re.escape(symbol) + r"\b")
+    matches = [i for i, line in enumerate(lines) if pat.search(line)]
+    if not matches:
+        return ""
+
+    # Build windows: `before` lines before each match + match + `after` lines after
+    windows: list[list[int]] = []
+    for i in matches:
+        windows.append([max(0, i - before), min(len(lines), i + after + 1)])
+
+    # Merge overlapping or adjacent windows
+    merged = [windows[0]]
+    for start, end in windows[1:]:
+        if start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+
+    snippets: list[str] = []
+    for idx, (start, end) in enumerate(merged):
+        if idx > 0:
+            snippets.append("...")
+        for i in range(start, end):
+            snippets.append(f"{i + 1:4d}  {lines[i]}")
+
+    return "\n".join(snippets)

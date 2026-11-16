@@ -8,7 +8,7 @@ import textwrap
 
 import pytest
 
-from importlens_mcp.graph import CodeIndex
+from importlens_mcp.graph import CodeIndex, call_sites
 
 
 @pytest.fixture()
@@ -92,6 +92,76 @@ def test_stats(fake_repo):
     assert s["files"] == 2
     assert s["modules"] == 2
     assert s["symbols"] >= 3  # helper, Config, run
+
+
+# ---- call_sites -------------------------------------------------------------
+
+def test_call_sites_finds_usage(fake_repo):
+    snippet = call_sites(str(fake_repo), "main.py", "helper")
+    assert "helper" in snippet
+
+
+def test_call_sites_returns_empty_when_no_match(fake_repo):
+    snippet = call_sites(str(fake_repo), "utils.py", "run")
+    assert snippet == ""
+
+
+def test_call_sites_includes_line_numbers(fake_repo):
+    snippet = call_sites(str(fake_repo), "main.py", "helper")
+    # Formatted as "   N  <content>"
+    assert any(line.strip()[0].isdigit() for line in snippet.splitlines())
+
+
+def test_call_sites_context_lines_around_match(fake_repo):
+    # Default: 2 before + 3 after; both the import and the call site should appear
+    snippet = call_sites(str(fake_repo), "main.py", "helper")
+    assert "from utils import helper" in snippet
+    assert "helper()" in snippet
+
+
+def test_call_sites_merges_overlapping_windows(tmp_path):
+    (tmp_path / "foo.py").write_text(textwrap.dedent("""\
+        x = Foo()
+        y = x + 1
+        z = Foo()
+        w = z + 1
+    """))
+    snippet = call_sites(str(tmp_path), "foo.py", "Foo", before=0, after=1)
+    assert snippet.count("Foo") == 2
+
+
+def test_call_sites_separator_between_distant_windows(tmp_path):
+    lines = ["x = Foo()"] + ["pass"] * 10 + ["y = Foo()"]
+    (tmp_path / "bar.py").write_text("\n".join(lines) + "\n")
+    snippet = call_sites(str(tmp_path), "bar.py", "Foo", before=0, after=1)
+    assert "..." in snippet
+
+
+def test_call_sites_missing_file(tmp_path):
+    snippet = call_sites(str(tmp_path), "nonexistent.py", "Foo")
+    assert snippet == ""
+
+
+# ---- relevant_files (server) ------------------------------------------------
+
+def test_relevant_files_default_shows_call_sites(fake_repo):
+    import importlens_mcp.server as srv
+    srv._ROOT = str(fake_repo)
+    srv._index = None
+    result = srv.relevant_files("helper")
+    # Default: dependents (main.py) show inline call site snippet
+    assert "```python" in result
+    assert "helper" in result
+
+
+def test_relevant_files_include_full_dependents_lists_path_only(fake_repo):
+    import importlens_mcp.server as srv
+    srv._ROOT = str(fake_repo)
+    srv._index = None
+    result = srv.relevant_files("helper", include_full_dependents=True)
+    assert "main.py" in result
+    # With full_dependents=True the code block is NOT inlined
+    assert "```python" not in result
 
 
 # ---- CLI: importlens-mcp map ------------------------------------------------

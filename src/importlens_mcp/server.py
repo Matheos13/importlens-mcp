@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 
-from .graph import CodeIndex
+from .graph import CodeIndex, call_sites
 
 # The MCP Python SDK renamed FastMCP -> MCPServer in v2. Support both so the
 # server runs whether the user is on the old or new SDK.
@@ -72,17 +72,23 @@ def project_map() -> str:
 
 
 @mcp.tool()
-def relevant_files(symbol: str, include_source: bool = False) -> str:
+def relevant_files(
+    symbol: str,
+    include_source: bool = False,
+    include_full_dependents: bool = False,
+) -> str:
     """Find the files that matter for a given symbol (function or class name).
 
-    Returns the file(s) that define it, the files that import those modules
-    (dependents), and the local modules they depend on. This is the slice of
-    the repo an agent needs to reason about `symbol` — usually a handful of
-    files instead of the whole tree.
+    Returns the file(s) that define it, the call sites in files that import
+    those modules (dependents), and the local modules they depend on. This is
+    the slice of the repo an agent needs to reason about `symbol` — usually a
+    handful of files instead of the whole tree.
 
     Args:
         symbol: a top-level function or class name, e.g. "CodeIndex".
         include_source: if true, also inline the defining files' source.
+        include_full_dependents: if true, list dependent file paths instead of
+            inlining the call sites where the symbol is used.
     """
     idx = _get_index()
     defs = idx.find_symbol(symbol)
@@ -99,15 +105,22 @@ def relevant_files(symbol: str, include_source: bool = False) -> str:
         seen.add(path)
 
     deps: set[str] = set()
-    dependents: set[str] = set()
+    dependents_set: set[str] = set()
     for path in defs:
         deps.update(idx.local_imports(path))
-        dependents.update(idx.dependents(path))
+        dependents_set.update(idx.dependents(path))
 
-    if dependents:
+    if dependents_set:
         out.append("\n## Used by (dependents)")
-        for path in sorted(dependents - seen):
-            out.append(f"- {path}")
+        for path in sorted(dependents_set - seen):
+            if include_full_dependents:
+                out.append(f"- {path}")
+            else:
+                snippet = call_sites(_ROOT, path, symbol)
+                if snippet:
+                    out.append(f"\n### {path}\n```python\n{snippet}\n```")
+                else:
+                    out.append(f"- {path}")
             seen.add(path)
 
     if deps:

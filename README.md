@@ -62,14 +62,28 @@ relevant_files("CodeIndex")
 - src/importlens_mcp/graph.py
 
 ## Used by (dependents)
-- src/importlens_mcp/__main__.py
-- src/importlens_mcp/server.py
+
+### src/importlens_mcp/__main__.py
+```python
+   1  from importlens_mcp.graph import CodeIndex, call_sites
+...
+  22      idx = CodeIndex(str(root)).build()
+  23      s   = idx.stats()
+  24      ...
+```
+
+### src/importlens_mcp/server.py
+```python
+   1  from .graph import CodeIndex, call_sites
+...
+  34      _index = CodeIndex(_ROOT).build()
+```
 
 ## Depends on (local imports)
 - (none)
 ```
 
-Three files instead of thirty. That's the whole idea.
+Dependents show only the lines that use the symbol (+ a few lines of context), not the whole file. Pass `include_full_dependents=True` to get file paths instead.
 
 ## Quick look without an agent
 
@@ -96,24 +110,27 @@ Import resolution is best-effort and handles `src/` layouts and relative imports
 
 ## Benchmark
 
-Three strategies compared on two real repos. Token estimate: `len(source) // 4`.
+Four strategies compared on two real repos. Token estimate: `len(source) // 4`.
 
 - **all files** — every source `.py` file (worst-case baseline)
-- **grep baseline** — files whose text contains the symbol name, plus their direct local imports (what an agent actually does: grep for the name, read those files and their deps)
-- **importlens** — only the files `relevant_files()` returns: defining file + local imports + dependents
+- **grep full files** — files whose text contains the symbol name, plus their direct local imports, all read in full (naive agent behaviour)
+- **grep -C3** — fairer smart-grep: defining file read in full, every other mentioning file as a 3-line-context snippet (what a careful agent would actually do)
+- **importlens** — what `relevant_files()` returns: defining file + local imports in full, dependent files as call-site snippets (2 lines before + 3 after each match)
 
-| repo | symbol | all files | grep baseline | importlens | % saved vs grep |
-|------|--------|----------:|--------------:|-----------:|----------------:|
-| trading-bot | `RiskManager` | 8,187 | 7,884 | 5,255 | +33% |
-| trading-bot | `TradingBot` | 8,187 | 7,884 | 4,794 | +39% |
-| trading-bot | `BacktestEngine` | 8,187 | 7,884 | 4,625 | +41% |
-| httpx | `DigestAuth` | 71,089 | 53,965 | 36,062 | +33% |
-| httpx | `Timeout` | 71,089 | 61,102 | 42,838 | +30% |
-| httpx | `MultipartStream` | 71,089 | 9,436 | 18,487 | −96% |
-| httpx | `Client` | 71,089 | 65,077 | 58,993 | +9% |
-| httpx | `Request` | 71,089 | 66,452 | 66,357 | +0% |
+| repo | symbol | all files | grep full files | grep -C3 | importlens | % saved vs grep -C3 |
+|------|--------|----------:|----------------:|---------:|-----------:|--------------------:|
+| trading-bot | `RiskManager` | 8,187 | 7,884 | 912 | 842 | +8% |
+| trading-bot | `TradingBot` | 8,187 | 7,884 | 1,821 | 3,630 | −99% |
+| trading-bot | `BacktestEngine` | 8,187 | 7,884 | 1,557 | 2,886 | −85% |
+| httpx | `DigestAuth` | 71,089 | 53,965 | 3,017 | 18,377 | −509% |
+| httpx | `Timeout` | 71,089 | 61,102 | 3,045 | 19,799 | −550% |
+| httpx | `MultipartStream` | 71,089 | 9,436 | 2,603 | 5,403 | −108% |
+| httpx | `Client` | 71,089 | 65,077 | 17,514 | 51,865 | −196% |
+| httpx | `Request` | 71,089 | 66,452 | 16,113 | 33,897 | −110% |
 
-**Where importlens wins:** symbols with a clear dependency boundary (`DigestAuth`, `Timeout`, `RiskManager`) — it prunes noise that grep can't. **Where it doesn't:** `Client` and `Request` are imported by almost every file, so both strategies converge on most of the codebase. `MultipartStream` is the inverse case: importlens tracks *dependents* (files that import it), pulling in the large `_client.py`; grep, which only matches the literal name, is cheaper here.
+**Honest take:** importlens beats grep -C3 only when the symbol is well-isolated — `RiskManager` wins by 8% because grep matches many files that happen to mention the name, while importlens knows exactly which file defines it. For everything else importlens is more expensive, because it insists on reading the full defining file *and all its local imports*, not just snippets.
+
+That cost is intentional. Grep -C3 gives you fragments: enough to see call sites, not enough to safely modify the implementation. Importlens gives you the full understanding cone — the implementation plus everything it depends on — so your agent can reason about the code rather than just locate it. If you only need to know where `Timeout` is called, grep -C3 is cheaper. If you need to change how it works, the extra tokens pay for themselves.
 
 Rerun with `python benchmarks/bench.py` (httpx needs `git clone --depth=1 https://github.com/encode/httpx /tmp/httpx` first).
 
