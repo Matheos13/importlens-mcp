@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Benchmark importlens-mcp: tokens read with vs without on real repos.
+"""Benchmark importlens-mcp: tokens read across three strategies on real repos.
 
 Methodology
 -----------
-  tokens_without  total tokens across all source .py files (what an agent
-                  reads to explore an unfamiliar codebase on its own)
-  tokens_with     tokens in only the files importlens returns for the
-                  target symbol: defining file + its local imports + its
-                  dependents (test files excluded from both counts)
+  all files     total tokens across every source .py file (worst-case baseline)
+  grep          files whose text contains the symbol name (word-boundary match),
+                plus the local imports of each matched file — this is what an
+                agent actually does: grep for the name, then read those files
+                and their direct dependencies
+  importlens    files from relevant_files(): defining file + local imports +
+                dependents (test files excluded from all three counts)
 
 Token estimate: len(file_text) // 4  (~4 chars per token, standard approximation)
 
@@ -28,6 +30,7 @@ Usage
 from __future__ import annotations
 
 import os
+import re
 import sys
 from dataclasses import dataclass
 
@@ -42,16 +45,17 @@ class Task:
     repo_label: str
     repo_path: str
     symbol: str
-    description: str
 
 
 TASKS: list[Task] = [
-    Task("trading-bot", "~/Projects/trading-bot", "RiskManager",    "add position-sizing floor"),
-    Task("trading-bot", "~/Projects/trading-bot", "TradingBot",     "debug run-loop signal handling"),
-    Task("trading-bot", "~/Projects/trading-bot", "BacktestEngine", "add Sharpe/Sortino tracking"),
-    Task("httpx",       "/tmp/httpx",             "DigestAuth",     "implement OAuth2 auth flow"),
-    Task("httpx",       "/tmp/httpx",             "Timeout",        "add per-request timeout override"),
-    Task("httpx",       "/tmp/httpx",             "MultipartStream","fix multipart boundary encoding"),
+    Task("trading-bot", "~/Projects/trading-bot", "RiskManager"),
+    Task("trading-bot", "~/Projects/trading-bot", "TradingBot"),
+    Task("trading-bot", "~/Projects/trading-bot", "BacktestEngine"),
+    Task("httpx",       "/tmp/httpx",             "DigestAuth"),
+    Task("httpx",       "/tmp/httpx",             "Timeout"),
+    Task("httpx",       "/tmp/httpx",             "MultipartStream"),
+    Task("httpx",       "/tmp/httpx",             "Client"),
+    Task("httpx",       "/tmp/httpx",             "Request"),
 ]
 
 
@@ -65,8 +69,38 @@ def _tokens(root: str, paths: set[str]) -> int:
     return total // 4
 
 
+def _grep_set(root: str, idx: CodeIndex, symbol: str, src: set[str]) -> set[str]:
+    """Files that mention `symbol` as a whole word, plus their local imports."""
+    pat = re.compile(r"\b" + re.escape(symbol) + r"\b")
+    matched: set[str] = set()
+    for p in src:
+        try:
+            text = open(os.path.join(root, p), encoding="utf-8").read()
+        except OSError:
+            continue
+        if pat.search(text):
+            matched.add(p)
+    result = set(matched)
+    for p in matched:
+        result.update(idx.local_imports(p))
+    return result & src
+
+
+def _importlens_set(idx: CodeIndex, symbol: str, src: set[str]) -> set[str]:
+    """Defining files + their local imports + their dependents."""
+    defs = idx.find_symbol(symbol)
+    if not defs:
+        return set()
+    seen: set[str] = set(defs)
+    for p in defs:
+        seen.update(idx.local_imports(p))
+        seen.update(idx.dependents(p))
+    return seen & src
+
+
 def benchmark(tasks: list[Task]) -> list[tuple]:
-    cache: dict[str, tuple[CodeIndex, int]] = {}
+    # (repo_label, symbol, all_tok, grep_tok, il_tok, pct_vs_grep)
+    cache: dict[str, tuple[CodeIndex, set[str], int]] = {}
     rows = []
     for task in tasks:
         root = os.path.expanduser(task.repo_path)
@@ -77,38 +111,36 @@ def benchmark(tasks: list[Task]) -> list[tuple]:
         if root not in cache:
             idx = CodeIndex(root).build()
             src = {p for p in idx.files if not p.startswith("tests/")}
-            cache[root] = (idx, _tokens(root, src))
+            cache[root] = (idx, src, _tokens(root, src))
 
-        idx, all_tok = cache[root]
-        defs = idx.find_symbol(task.symbol)
-        if not defs:
+        idx, src, all_tok = cache[root]
+
+        grep_files = _grep_set(root, idx, task.symbol, src)
+        il_files   = _importlens_set(idx, task.symbol, src)
+
+        if not il_files:
             print(f"[warn] symbol {task.symbol!r} not found in {root}", file=sys.stderr)
             continue
 
-        relevant: set[str] = set(defs)
-        for p in defs:
-            relevant.update(idx.local_imports(p))
-            relevant.update(idx.dependents(p))
-        relevant = {p for p in relevant if not p.startswith("tests/")}
+        grep_tok = _tokens(root, grep_files)
+        il_tok   = _tokens(root, il_files)
+        pct      = round(100 * (1 - il_tok / grep_tok)) if grep_tok else 0
 
-        with_tok = _tokens(root, relevant)
-        pct = round(100 * (1 - with_tok / all_tok)) if all_tok else 0
-        rows.append((task.repo_label, task.description, all_tok, with_tok, pct))
+        rows.append((task.repo_label, task.symbol, all_tok, grep_tok, il_tok, pct))
     return rows
 
 
 def print_table(rows: list[tuple]) -> None:
-    print("| repo | task | tokens without | tokens with | % saved |")
-    print("|------|------|---------------:|------------:|--------:|")
-    for repo, task, wo, wi, pct in rows:
-        print(f"| {repo} | {task} | {wo:,} | {wi:,} | {pct}% |")
+    print("| repo | symbol | all files | grep baseline | importlens | % saved vs grep |")
+    print("|------|--------|----------:|--------------:|-----------:|----------------:|")
+    for repo, sym, all_t, grep_t, il_t, pct in rows:
+        print(f"| {repo} | `{sym}` | {all_t:,} | {grep_t:,} | {il_t:,} | {pct:+d}% |")
 
 
 def _tasks_from_argv(args: list[str]) -> list[Task]:
-    """Build a task list from  <repo_path> <Symbol1> [Symbol2 ...]."""
     root = args[0]
     label = os.path.basename(root.rstrip("/"))
-    return [Task(label, root, sym, sym) for sym in args[1:]]
+    return [Task(label, root, sym) for sym in args[1:]]
 
 
 if __name__ == "__main__":

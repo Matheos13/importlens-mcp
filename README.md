@@ -96,16 +96,24 @@ Import resolution is best-effort and handles `src/` layouts and relative imports
 
 ## Benchmark
 
-Measured on two real repos. **tokens without** = all source `.py` files the agent would have to read to find context on its own. **tokens with** = only the files `relevant_files(symbol)` returns. Token estimate: `len(source) // 4`.
+Three strategies compared on two real repos. Token estimate: `len(source) // 4`.
 
-| repo | task | tokens without | tokens with | % saved |
-|------|------|---------------:|------------:|--------:|
-| trading-bot | add position-sizing floor | 8,187 | 5,255 | 36% |
-| trading-bot | debug run-loop signal handling | 8,187 | 4,794 | 41% |
-| trading-bot | add Sharpe/Sortino tracking | 8,187 | 4,625 | 44% |
-| httpx | implement OAuth2 auth flow | 71,089 | 36,062 | 49% |
-| httpx | add per-request timeout override | 71,089 | 42,838 | 40% |
-| httpx | fix multipart boundary encoding | 71,089 | 18,487 | 74% |
+- **all files** — every source `.py` file (worst-case baseline)
+- **grep baseline** — files whose text contains the symbol name, plus their direct local imports (what an agent actually does: grep for the name, read those files and their deps)
+- **importlens** — only the files `relevant_files()` returns: defining file + local imports + dependents
+
+| repo | symbol | all files | grep baseline | importlens | % saved vs grep |
+|------|--------|----------:|--------------:|-----------:|----------------:|
+| trading-bot | `RiskManager` | 8,187 | 7,884 | 5,255 | +33% |
+| trading-bot | `TradingBot` | 8,187 | 7,884 | 4,794 | +39% |
+| trading-bot | `BacktestEngine` | 8,187 | 7,884 | 4,625 | +41% |
+| httpx | `DigestAuth` | 71,089 | 53,965 | 36,062 | +33% |
+| httpx | `Timeout` | 71,089 | 61,102 | 42,838 | +30% |
+| httpx | `MultipartStream` | 71,089 | 9,436 | 18,487 | −96% |
+| httpx | `Client` | 71,089 | 65,077 | 58,993 | +9% |
+| httpx | `Request` | 71,089 | 66,452 | 66,357 | +0% |
+
+**Where importlens wins:** symbols with a clear dependency boundary (`DigestAuth`, `Timeout`, `RiskManager`) — it prunes noise that grep can't. **Where it doesn't:** `Client` and `Request` are imported by almost every file, so both strategies converge on most of the codebase. `MultipartStream` is the inverse case: importlens tracks *dependents* (files that import it), pulling in the large `_client.py`; grep, which only matches the literal name, is cheaper here.
 
 Rerun with `python benchmarks/bench.py` (httpx needs `git clone --depth=1 https://github.com/encode/httpx /tmp/httpx` first).
 
