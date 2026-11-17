@@ -56,6 +56,7 @@ def main() -> None:
 
         if dependents_set:
             out.append("\n## Used by (dependents)")
+            out.append("> Call-site snippets only. Call `file_context(\"<path>\")` for the full file if you need more context.")
             for path in sorted(dependents_set - seen):
                 snippet = call_sites(root, path, symbol)
                 if snippet:
@@ -66,6 +67,7 @@ def main() -> None:
 
         if deps:
             out.append("\n## Depends on (local imports)")
+            out.append("> Signatures only — no implementation bodies. Call `file_context(\"<path>\")` to read the full source if your change depends on how a dependency works.")
             for path in sorted(deps - set(defs)):
                 sig = signatures(root, path)
                 if sig:

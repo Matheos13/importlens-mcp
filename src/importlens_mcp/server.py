@@ -35,14 +35,14 @@ def _get_index(refresh: bool = False) -> CodeIndex:
     return _index
 
 
-def _read(path: str, max_lines: int = 400) -> str:
+def _read(path: str, max_lines: int | None = 400) -> str:
     abspath = os.path.join(_ROOT, path)
     try:
         with open(abspath, "r", encoding="utf-8") as fh:
             lines = fh.read().splitlines()
     except (OSError, UnicodeDecodeError):
         return f"[could not read {path}]"
-    if len(lines) > max_lines:
+    if max_lines is not None and len(lines) > max_lines:
         body = "\n".join(lines[:max_lines])
         return f"{body}\n... [truncated, {len(lines) - max_lines} more lines]"
     return "\n".join(lines)
@@ -115,6 +115,8 @@ def relevant_files(
 
     if dependents_set:
         out.append("\n## Used by (dependents)")
+        if not include_full_dependents:
+            out.append("> Call-site snippets only. Call `file_context(\"<path>\")` for the full file if you need more context.")
         for path in sorted(dependents_set - seen):
             if include_full_dependents:
                 out.append(f"- {path}")
@@ -128,6 +130,8 @@ def relevant_files(
 
     if deps:
         out.append("\n## Depends on (local imports)")
+        if not include_full_imports:
+            out.append("> Signatures only — no implementation bodies. Call `file_context(\"<path>\")` to read the full source if your change depends on how a dependency works.")
         for path in sorted(deps - set(defs)):
             if include_full_imports:
                 out.append(f"- {path}")
@@ -165,7 +169,7 @@ def file_context(path: str) -> str:
     else:
         header.append("Local dependencies: none")
     header.append("\n## Source\n```python")
-    return "\n".join(header) + "\n" + _read(path) + "\n```"
+    return "\n".join(header) + "\n" + _read(path, max_lines=None) + "\n```"
 
 
 @mcp.tool()

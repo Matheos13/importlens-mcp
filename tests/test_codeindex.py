@@ -249,6 +249,52 @@ def test_relevant_files_include_full_dependents_lists_path_only(fake_repo):
     assert "```python" not in result
 
 
+# ---- notes in relevant_files output ----------------------------------------
+
+def test_relevant_files_dependents_note(fake_repo):
+    import importlens_mcp.server as srv
+    srv._ROOT = str(fake_repo)
+    srv._index = None
+    result = srv.relevant_files("helper")
+    assert "file_context" in result
+    assert "snippets" in result.lower() or "snippet" in result.lower()
+
+
+def test_relevant_files_imports_note(fake_repo):
+    import importlens_mcp.server as srv
+    srv._ROOT = str(fake_repo)
+    srv._index = None
+    result = srv.relevant_files("run")  # run is in main.py which imports utils
+    assert "file_context" in result
+    assert "signatures only" in result.lower()
+
+
+def test_relevant_files_no_note_when_full_flags_set(fake_repo):
+    import importlens_mcp.server as srv
+    srv._ROOT = str(fake_repo)
+    srv._index = None
+    result_deps = srv.relevant_files("helper", include_full_dependents=True)
+    result_imps = srv.relevant_files("run", include_full_imports=True)
+    # notes are suppressed when full-listing flags are set
+    assert "Call-site snippets only" not in result_deps
+    assert "Signatures only" not in result_imps
+
+
+# ---- file_context returns full source (no truncation) -----------------------
+
+def test_file_context_returns_full_source(tmp_path):
+    import importlens_mcp.server as srv
+    # write a file longer than the old 400-line cap
+    lines = [f"x_{i} = {i}" for i in range(450)]
+    big_file = tmp_path / "big.py"
+    big_file.write_text("\n".join(lines))
+    srv._ROOT = str(tmp_path)
+    srv._index = None
+    result = srv.file_context("big.py")
+    assert "x_449" in result          # last line must be present
+    assert "truncated" not in result
+
+
 # ---- CLI: importlens-mcp map ------------------------------------------------
 
 def test_map_cli_runs(fake_repo):
