@@ -2,18 +2,14 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/importlens-mcp.svg)](https://pypi.org/project/importlens-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Matheos13/importlens-mcp/blob/main/LICENSE)
+[![CI](https://github.com/Matheos13/importlens-mcp/actions/workflows/tests.yml/badge.svg)](https://github.com/Matheos13/importlens-mcp/actions/workflows/tests.yml)
 
-**Stop feeding your coding agent the whole repo. Feed it the files that actually matter.**
+**Give your coding agent the right slice of a Python repo in one call.**
 
 importlens-mcp is a tiny [MCP](https://modelcontextprotocol.io) server that reads your Python project's *import graph* and hands your agent only the slice of code relevant to what it's working on — the file that defines a symbol, the files that use it, and the files it depends on. No embeddings, no vector DB, no re-reading the tree on every question.
 
-```
-npx-style one-liner for python:  uvx importlens-mcp
-```
+> **Why:** when an agent needs to understand or change a symbol, it needs the defining file, the call sites that use it, and the interfaces of its dependencies — not the whole repo. importlens-mcp answers *"which files matter for `RiskManager`?"* in one call, returning exactly that slice using nothing but Python's own `ast`.
 
-> **Why:** on a big repo, agents burn tokens (and get confused) re-reading files that have nothing to do with the task. importlens-mcp answers *"which files matter for `UserService`?"* in one call, using nothing but Python's own `ast`.
-
-<!-- TODO: drop a 10-second demo gif here before launch -->
 ![demo](https://raw.githubusercontent.com/Matheos13/importlens-mcp/main/docs/demo.gif)
 
 ---
@@ -21,17 +17,17 @@ npx-style one-liner for python:  uvx importlens-mcp
 ## Install
 
 ```bash
-# with uv (recommended)
-uvx importlens-mcp            # run straight from PyPI, no install
+# run straight from PyPI with uv — no install needed
+uvx importlens-mcp@latest
 
 # or pip
 pip install importlens-mcp
 ```
 
-Add it to your agent. For **Claude Code**:
+Add it to your agent. For **Claude Code** (user-wide):
 
 ```bash
-claude mcp add importlens-mcp -- uvx importlens-mcp
+claude mcp add --scope user importlens-mcp -- uvx importlens-mcp@latest
 ```
 
 For any MCP client, point it at the `importlens-mcp` command (stdio transport). It indexes the current working directory by default, or set `IMPORTLENS_ROOT`.
@@ -89,13 +85,15 @@ Dependents show only the lines that use the symbol (+ a few lines of context), n
 
 ```bash
 importlens-mcp map .
+importlens-mcp relevant RiskManager
 ```
 
 ```
-importlens-mcp: 4 files, 4 modules, 10 symbols, 371 lines
-  importlens_mcp           src/importlens_mcp/__init__.py
-  importlens_mcp.graph     src/importlens_mcp/graph.py
-  importlens_mcp.server    src/importlens_mcp/server.py
+importlens-mcp: 6 files, 6 modules, 51 symbols, 1021 lines
+  importlens_mcp                           src/importlens_mcp/__init__.py
+  importlens_mcp.__main__                  src/importlens_mcp/__main__.py
+  importlens_mcp.graph                     src/importlens_mcp/graph.py
+  importlens_mcp.server                    src/importlens_mcp/server.py
   ...
 ```
 
@@ -143,7 +141,7 @@ Rerun with `python benchmarks/bench.py` (httpx needs `git clone --depth=1 https:
 
 ## Contributing
 
-It's ~370 lines of plain Python. Read it, break it, send a PR. Good first issues are labeled.
+It's ~530 lines of plain Python. Read it, break it, send a PR. Good first issues are labeled.
 
 ## License
 

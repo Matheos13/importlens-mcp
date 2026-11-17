@@ -1,7 +1,8 @@
 """Entry point: `importlens-mcp` runs the MCP server over stdio.
 
-`importlens-mcp map [path]` prints the project map to the terminal — handy for a
-quick look or a README gif without wiring up an agent.
+Subcommands (no subcommand → MCP server):
+  map [path]      print the project map
+  relevant <sym>  print the relevant-files slice for a symbol
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import sys
 
 def main() -> None:
     args = sys.argv[1:]
+
     if args and args[0] == "map":
         from .graph import CodeIndex
         root = args[1] if len(args) > 1 else "."
@@ -21,6 +23,57 @@ def main() -> None:
               f"{s['symbols']} symbols, {s['total_lines']} lines")
         for mod, path in sorted(idx.module_to_path.items()):
             print(f"  {mod:<40} {path}")
+        return
+
+    if args and args[0] == "relevant":
+        if len(args) < 2:
+            print("usage: importlens-mcp relevant <Symbol>", file=sys.stderr)
+            sys.exit(1)
+        symbol = args[1]
+        root = os.getcwd()
+        from .graph import CodeIndex, call_sites, signatures
+        idx = CodeIndex(root).build()
+        defs = idx.find_symbol(symbol)
+        if not defs:
+            print(f"No top-level definition of `{symbol}` found. "
+                  "Try `importlens-mcp map .` to see available symbols.",
+                  file=sys.stderr)
+            sys.exit(1)
+
+        out = [f"# Relevant files for `{symbol}`", ""]
+        seen: set[str] = set()
+
+        out.append("## Defined in")
+        for path in defs:
+            out.append(f"- {path}")
+            seen.add(path)
+
+        deps: set[str] = set()
+        dependents_set: set[str] = set()
+        for path in defs:
+            deps.update(idx.local_imports(path))
+            dependents_set.update(idx.dependents(path))
+
+        if dependents_set:
+            out.append("\n## Used by (dependents)")
+            for path in sorted(dependents_set - seen):
+                snippet = call_sites(root, path, symbol)
+                if snippet:
+                    out.append(f"\n### {path}\n```python\n{snippet}\n```")
+                else:
+                    out.append(f"- {path}")
+                seen.add(path)
+
+        if deps:
+            out.append("\n## Depends on (local imports)")
+            for path in sorted(deps - set(defs)):
+                sig = signatures(root, path)
+                if sig:
+                    out.append(f"\n### {path}\n```python\n{sig}\n```")
+                else:
+                    out.append(f"- {path}")
+
+        print("\n".join(out))
         return
 
     # Default: run the MCP server. Index the cwd unless told otherwise.
