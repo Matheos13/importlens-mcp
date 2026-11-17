@@ -185,7 +185,7 @@ def run_one(task, condition: str, run_index: int, dry_run: bool = False) -> RunR
         return rec
 
     wt_name = f"bench-{task.name}-{condition}-{run_index}"
-    wt_path = pathlib.Path(tempfile.gettempdir()) / wt_name
+    wt_path = (pathlib.Path(tempfile.gettempdir()) / wt_name).resolve()
     wt_src  = str(wt_path / "src")
 
     # ── create fresh worktree ──────────────────────────────────────────────
@@ -225,6 +225,13 @@ def run_one(task, condition: str, run_index: int, dry_run: bool = False) -> RunR
     mcp_cfg_path = wt_path / "_bench_mcp.json"
     _write_mcp_config(condition, str(wt_path), mcp_cfg_path)
 
+    # Allow Edit/Write within the worktree without interactive approval prompts.
+    wt_claude = wt_path / ".claude"
+    wt_claude.mkdir(exist_ok=True)
+    (wt_claude / "settings.json").write_text(json.dumps({
+        "permissions": {"allow": ["Edit(**)", "Write(**)"]},
+    }))
+
     prompt = task.prompt.format(worktree=str(wt_path))
 
     cmd = [
@@ -233,6 +240,7 @@ def run_one(task, condition: str, run_index: int, dry_run: bool = False) -> RunR
         "--verbose",
         "--strict-mcp-config",
         "--mcp-config", str(mcp_cfg_path),
+        "--add-dir", str(wt_path),
     ]
 
     _hide_claude_md()

@@ -146,8 +146,31 @@ It's ~530 lines of plain Python. Read it, break it, send a PR. Good first issues
 <!-- BENCH:START -->
 ## Agent Benchmark
 
-*No runs recorded yet. Execute `python benchmarks/agent/runner.py`.*
+24 total runs (quick: 3 tasks × with/without = 6; full: 6 tasks × with/without × 2 = 24).  
 
+### Per-task results
+
+| cat | task | description | with pass | w/o pass | Δ pass | with tokens | w/o tokens | with tools | w/o tools | with tok/pass | w/o tok/pass | % fetched body |
+|-----|------|-------------|-----------|----------|--------|-------------|------------|------------|-----------|---------------|--------------|----------------|
+| A | `a1_commission` | add commission_pct to RiskManager | 100% | 100% | 0 | 71,192 | 70,947 | 3 | 3 | 71,192 | 70,947 | — |
+| A | `a2_trailing_stop` | add trailing_stop_pct to RiskManager | 100% | 100% | 0 | 89,588 | 109,098 | 4 | 5 | 89,588 | 109,098 | — |
+| B | `b1_fill_ts` | timestamp every PaperBroker fill | 100% | 100% | 0 | 185,512 | 227,404 | 12.5 | 11 | 185,512 | 227,404 | — |
+| B | `b2_max_trades` | max_trades cap on BacktestEngine | 100% | 100% | 0 | 227,374 | 180,585 | 22.5 | 17.5 | 227,374 | 180,585 | — |
+| C | `c1_stop_low` | stop-loss on candle.low + fill at stop price | 100% | 100% | 0 | 103,717 | 117,106 | 5 | 4.5 | 103,717 | 117,106 | 50% |
+| C | `c2_warmup` | warmup period in run_sweep | 100% | 100% | 0 | 283,694 | 295,788 | 12.5 | 15.5 | 283,694 | 295,788 | 100% |
+| — | **TOTAL** | — | 12/12 | 12/12 | — | 961,076 (-4%) | 1,000,926 | — | — | — | — | — |
+
+### Category summary
+
+| category | with pass% | w/o pass% | with tokens (med) | w/o tokens (med) | % fetched body (C only) |
+|----------|-----------|----------|-------------------|-----------------|------------------------|
+| A – defining file | 100% | 100% | 80,390 | 90,022 | — |
+| B – call sites | 100% | 100% | 206,442 | 203,994 | — |
+| C – dep body | 100% | 100% | 193,706 | 206,446 | 75% |
+
+> **tok/pass** = total tokens across all runs ÷ number of passing runs (lower is better; ∞ if no run passed).  **% fetched body** = fraction of *with-importlens* runs on category-C tasks where the agent called `file_context` or `Read` on the tracked dependency.
+
+> **Note:** small repo (~1.4k source lines), 2 runs per condition — differences under ~10% are within run-to-run noise. Token counts include cached input.
 <!-- BENCH:END -->
 
 ## License

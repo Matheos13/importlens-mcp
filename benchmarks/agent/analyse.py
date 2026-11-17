@@ -53,6 +53,12 @@ def _fmt(n: float) -> str:
     return f"{n:,.0f}"
 
 
+def _fmt_tools(n: float) -> str:
+    if n == 0:
+        return "—"
+    return str(int(n)) if n == int(n) else f"{n:.1f}"
+
+
 def load_records() -> list[dict]:
     if not RESULTS.exists():
         return []
@@ -86,11 +92,13 @@ def per_task_row(task: str, stats: dict) -> dict:
         passes       = sum(1 for r in runs if r.get("passed"))
         tokens       = [r.get("total_tokens", 0) for r in runs if r.get("total_tokens", 0) > 0]
         total_tokens = sum(tokens)
+        tools        = [r.get("tool_calls", 0) for r in runs]
         fetched      = sum(1 for r in runs if r.get("fetched_dep_body"))
         return dict(
             n=len(runs), passes=passes,
             median_tok=_median(tokens),
             tok_per_pass=total_tokens / passes if passes else 0,
+            median_tools=_median(tools),
             fetched=fetched,
         )
 
@@ -126,18 +134,18 @@ def build_table(records: list[dict]) -> str:
     # ── per-task table ───────────────────────────────────────────────────────
     lines.append("### Per-task results")
     lines.append("")
-    hdr = (
+    lines.append(
         "| cat | task | description "
         "| with pass | w/o pass | Δ pass "
         "| with tokens | w/o tokens "
+        "| with tools | w/o tools "
         "| with tok/pass | w/o tok/pass "
         "| % fetched body |"
     )
-    sep = "|" + "|".join(["---"] * hdr.count("|")) + "|"
-    # simpler separator
-    lines.append(hdr)
-    lines.append("|-----|------|-------------|-----------|----------|--------|-------------|------------|---------------|--------------|----------------|")
+    lines.append("|-----|------|-------------|-----------|----------|--------|-------------|------------|------------|-----------|---------------|--------------|----------------|")
 
+    sum_w_tok = sum_wo_tok = 0.0
+    sum_w_pass = sum_wo_pass = sum_w_n = sum_wo_n = 0
     for r in rows:
         w, wo = r["with_"], r["without"]
         delta = (w["passes"] - wo["passes"]) if (w["n"] and wo["n"]) else None
@@ -151,9 +159,25 @@ def build_table(records: list[dict]) -> str:
             f"| {r['category']} | `{r['task']}` | {r['desc']} "
             f"| {_pct(w['passes'], w['n'])} | {_pct(wo['passes'], wo['n'])} | {delta_s} "
             f"| {_fmt(w['median_tok'])} | {_fmt(wo['median_tok'])} "
+            f"| {_fmt_tools(w['median_tools'])} | {_fmt_tools(wo['median_tools'])} "
             f"| {_fmt(w['tok_per_pass'])} | {_fmt(wo['tok_per_pass'])} "
             f"| {fetch_s} |"
         )
+        sum_w_tok  += w["median_tok"]
+        sum_wo_tok += wo["median_tok"]
+        sum_w_pass  += w["passes"]; sum_w_n  += w["n"]
+        sum_wo_pass += wo["passes"]; sum_wo_n += wo["n"]
+
+    tok_pct = round(100 * (sum_w_tok - sum_wo_tok) / sum_wo_tok) if sum_wo_tok else 0
+    tok_pct_s = f"{tok_pct:+d}%"
+    lines.append(
+        f"| — | **TOTAL** | — "
+        f"| {sum_w_pass}/{sum_w_n} | {sum_wo_pass}/{sum_wo_n} | — "
+        f"| {_fmt(sum_w_tok)} ({tok_pct_s}) | {_fmt(sum_wo_tok)} "
+        f"| — | — "
+        f"| — | — "
+        f"| — |"
+    )
 
     lines.append("")
 
@@ -189,6 +213,12 @@ def build_table(records: list[dict]) -> str:
         "(lower is better; ∞ if no run passed).  "
         "**% fetched body** = fraction of *with-importlens* runs on category-C tasks "
         "where the agent called `file_context` or `Read` on the tracked dependency."
+    )
+    lines.append("")
+    lines.append(
+        "> **Note:** small repo (~1.4k source lines), 2 runs per condition — "
+        "differences under ~10% are within run-to-run noise. "
+        "Token counts include cached input."
     )
     lines.append("")
     return "\n".join(lines)
