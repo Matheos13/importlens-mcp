@@ -143,6 +143,13 @@ Rerun with `python benchmarks/bench.py` (httpx needs `git clone --depth=1 https:
 
 It's ~530 lines of plain Python. Read it, break it, send a PR. Good first issues are labeled.
 
+<!-- BENCH:START -->
+## Agent Benchmark
+
+*No runs recorded yet. Execute `python benchmarks/agent/runner.py`.*
+
+<!-- BENCH:END -->
+
 ## License
 
 MIT
