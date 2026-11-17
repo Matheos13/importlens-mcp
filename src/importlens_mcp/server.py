@@ -61,7 +61,7 @@ def project_map() -> str:
         "",
         f"- files: {s['files']}",
         f"- modules: {s['modules']}",
-        f"- top-level symbols: {s['symbols']}",
+        f"- symbols: {s['symbols']}",
         f"- total lines: {s['total_lines']}",
         "",
         "## Modules",
@@ -78,7 +78,7 @@ def relevant_files(
     include_full_dependents: bool = False,
     include_full_imports: bool = False,
 ) -> str:
-    """Find the files that matter for a given symbol (function or class name).
+    """Find the files that matter for a given function, class, or method.
 
     Returns the file(s) that define it, the call sites in dependent files, and
     signatures of the local modules they depend on. This is the slice of the repo
@@ -86,7 +86,8 @@ def relevant_files(
     of the whole tree.
 
     Args:
-        symbol: a top-level function or class name, e.g. "CodeIndex".
+        symbol: a function or class name, or a method name like "CodeIndex.build"
+            or "build".
         include_source: if true, also inline the defining files' source.
         include_full_dependents: if true, list dependent file paths instead of
             inlining the call sites where the symbol is used.
@@ -96,7 +97,7 @@ def relevant_files(
     idx = _get_index()
     defs = idx.find_symbol(symbol)
     if not defs:
-        return (f"No top-level definition of `{symbol}` found. "
+        return (f"No definition of `{symbol}` found. "
                 "Try project_map to see available symbols.")
 
     out = [f"# Relevant files for `{symbol}`", ""]

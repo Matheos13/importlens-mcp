@@ -25,7 +25,7 @@ class FileInfo:
     """What we learned from one .py file."""
     path: str                       # repo-relative path, posix style
     module: str                     # dotted module name, e.g. importlens_mcp.graph
-    defines: set[str] = field(default_factory=set)   # top-level func/class names
+    defines: set[str] = field(default_factory=set)   # function, class, and method names
     imports: set[str] = field(default_factory=set)   # dotted modules it imports
     lines: int = 0
 
@@ -92,6 +92,10 @@ class CodeIndex:
         for node in tree.body:
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 info.defines.add(node.name)
+            if isinstance(node, ast.ClassDef):
+                for method in node.body:
+                    if isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        info.defines.update((method.name, f"{node.name}.{method.name}"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -160,6 +164,7 @@ class CodeIndex:
         return sorted(set(out))
 
     def find_symbol(self, name: str) -> list[str]:
+        """Return defining paths for a name, including bare and qualified method names."""
         return sorted(self.symbol_to_paths.get(name, set()))
 
     def stats(self) -> dict:

@@ -35,7 +35,7 @@ def main() -> None:
         idx = CodeIndex(root).build()
         defs = idx.find_symbol(symbol)
         if not defs:
-            print(f"No top-level definition of `{symbol}` found. "
+            print(f"No definition of `{symbol}` found. "
                   "Try `importlens-mcp map .` to see available symbols.",
                   file=sys.stderr)
             sys.exit(1)
