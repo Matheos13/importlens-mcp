@@ -186,6 +186,7 @@ def run_one(task, condition: str, run_index: int, dry_run: bool = False) -> RunR
 
     wt_name = f"bench-{task.name}-{condition}-{run_index}"
     wt_path = pathlib.Path(tempfile.gettempdir()) / wt_name
+    wt_src  = str(wt_path / "src")
 
     # ── create fresh worktree ──────────────────────────────────────────────
     # Remove leftover worktree from a previous failed run if present
@@ -197,6 +198,29 @@ def run_one(task, condition: str, run_index: int, dry_run: bool = False) -> RunR
         ["git", "-C", str(REPO), "worktree", "add", str(wt_path), "HEAD"],
         capture_output=True, check=True,
     )
+
+    # ── env: PYTHONPATH must point at the worktree so the editable install
+    #    of trading-bot from ~/Projects/trading-bot is shadowed ──────────
+    wt_env = os.environ.copy()
+    wt_env["PYTHONPATH"] = wt_src
+
+    # ── isolation check: abort if tradingbot still loads from the wrong place
+    iso = subprocess.run(
+        [sys.executable, "-c",
+         f"import tradingbot; "
+         f"assert {repr(wt_src)} in tradingbot.__file__, "
+         f"f'loads from {{tradingbot.__file__}}'"],
+        env=wt_env, capture_output=True, text=True,
+    )
+    if iso.returncode != 0:
+        detail = (iso.stderr or iso.stdout).strip()
+        rec.error = f"isolation_check_failed: {detail}"
+        print(f"   ✗ {rec.error}")
+        subprocess.run(
+            ["git", "-C", str(REPO), "worktree", "remove", str(wt_path), "--force"],
+            capture_output=True,
+        )
+        return rec
 
     mcp_cfg_path = wt_path / "_bench_mcp.json"
     _write_mcp_config(condition, str(wt_path), mcp_cfg_path)
@@ -220,6 +244,7 @@ def run_one(task, condition: str, run_index: int, dry_run: bool = False) -> RunR
             text=True,
             timeout=360,
             cwd=str(wt_path),
+            env=wt_env,
         )
         stdout_lines = proc.stdout.splitlines()
         rec.claude_stderr = proc.stderr[-2000:] if proc.stderr else ""
@@ -251,8 +276,7 @@ def run_one(task, condition: str, run_index: int, dry_run: bool = False) -> RunR
     for fname in task.test_files:
         shutil.copy(HIDDEN / fname, wt_path / fname)
 
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(wt_path / "src")
+    env = wt_env  # same PYTHONPATH as the claude run
     test_cmd = [
         sys.executable, "-m", "pytest",
         *[str(wt_path / f) for f in task.test_files],
