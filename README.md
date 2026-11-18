@@ -97,6 +97,18 @@ importlens-mcp: 6 files, 6 modules, 51 symbols, 1021 lines
   ...
 ```
 
+## Call locations
+
+`relevant_files("helper", include_callers=True)` adds a `## Called by` section with file paths and line numbers for AST call expressions. The CLI exposes the same option:
+
+```bash
+importlens-mcp relevant helper --include-callers
+```
+
+The Python API also exposes `CodeIndex(root).build().callers("tools.helper")`, returning sorted `(path, line)` pairs. Repeated calls on one line share one location. With callers enabled, a query can report calls even when the definition is outside the indexed project.
+
+Names match their spelling in source. A bare `helper` includes `tools.helper()` and `obj.helper()`. A dotted `tools.helper` matches that written chain. Import aliases and receiver types are not resolved. Comments, strings, definitions, and references without a call are excluded. Caller locations are omitted by default.
+
 ## How it works
 
 1. Walk the repo, skipping the usual noise (`.venv`, `node_modules`, `__pycache__`, …).
@@ -134,7 +146,7 @@ Rerun with `python benchmarks/bench.py` (httpx needs `git clone --depth=1 https:
 
 ## Roadmap
 
-- [ ] call-graph edges (who calls this function), not just imports
+- [x] opt-in, name-based call locations alongside import edges
 - [ ] respect `.gitignore`
 - [ ] method-level symbols, not just top-level
 - [ ] `tree-sitter` backend for speed on huge repos

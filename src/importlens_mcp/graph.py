@@ -28,6 +28,7 @@ class FileInfo:
     defines: set[str] = field(default_factory=set)   # top-level func/class names
     imports: set[str] = field(default_factory=set)   # dotted modules it imports
     lines: int = 0
+    calls: dict[str, set[int]] = field(default_factory=dict)  # callee -> source lines
 
 
 class CodeIndex:
@@ -43,6 +44,9 @@ class CodeIndex:
     # ---- building -------------------------------------------------------
 
     def build(self) -> "CodeIndex":
+        self.files.clear()
+        self.module_to_path.clear()
+        self.symbol_to_paths.clear()
         for path in self._walk():
             info = self._parse(path)
             if info is None:
@@ -102,6 +106,20 @@ class CodeIndex:
                 elif node.level:
                     # relative import: resolve against this file's package
                     info.imports.add(self._resolve_relative(info.module, node))
+            elif isinstance(node, ast.Call):
+                target = node.func
+                parts: list[str] = []
+                while isinstance(target, ast.Attribute):
+                    parts.append(target.attr)
+                    target = target.value
+                if isinstance(target, ast.Name):
+                    parts.append(target.id)
+                elif parts:
+                    # A dynamic receiver still has a known final method name.
+                    parts = parts[:1]
+                if parts:
+                    for name in {parts[0], ".".join(reversed(parts))}:
+                        info.calls.setdefault(name, set()).add(node.lineno)
         return info
 
     def _resolve_relative(self, module: str, node: ast.ImportFrom) -> str:
@@ -161,6 +179,18 @@ class CodeIndex:
 
     def find_symbol(self, name: str) -> list[str]:
         return sorted(self.symbol_to_paths.get(name, set()))
+
+    def callers(self, name: str) -> list[tuple[str, int]]:
+        """Return sorted (path, line) call sites for a bare or written dotted name.
+
+        This is a syntactic index: aliases and receiver types are not inferred.
+        Repeated calls to the same name on one source line share one location.
+        """
+        return sorted(
+            (path, line)
+            for path, info in self.files.items()
+            for line in info.calls.get(name, ())
+        )
 
     def stats(self) -> dict:
         return {

@@ -2,7 +2,7 @@
 
 Subcommands (no subcommand → MCP server):
   map [path]      print the project map
-  relevant <sym>  print the relevant-files slice for a symbol
+  relevant <sym> [--include-callers]  print the relevant-files slice for a symbol
 """
 
 from __future__ import annotations
@@ -26,15 +26,18 @@ def main() -> None:
         return
 
     if args and args[0] == "relevant":
-        if len(args) < 2:
-            print("usage: importlens-mcp relevant <Symbol>", file=sys.stderr)
+        include_callers = "--include-callers" in args[1:]
+        symbols = [arg for arg in args[1:] if arg != "--include-callers"]
+        if not symbols:
+            print("usage: importlens-mcp relevant <Symbol> [--include-callers]", file=sys.stderr)
             sys.exit(1)
-        symbol = args[1]
+        symbol = symbols[0]
         root = os.getcwd()
         from .graph import CodeIndex, call_sites, signatures
         idx = CodeIndex(root).build()
         defs = idx.find_symbol(symbol)
-        if not defs:
+        callers = idx.callers(symbol) if include_callers else []
+        if not defs and not callers:
             print(f"No top-level definition of `{symbol}` found. "
                   "Try `importlens-mcp map .` to see available symbols.",
                   file=sys.stderr)
@@ -43,7 +46,8 @@ def main() -> None:
         out = [f"# Relevant files for `{symbol}`", ""]
         seen: set[str] = set()
 
-        out.append("## Defined in")
+        if defs:
+            out.append("## Defined in")
         for path in defs:
             out.append(f"- {path}")
             seen.add(path)
@@ -64,6 +68,10 @@ def main() -> None:
                 else:
                     out.append(f"- {path}")
                 seen.add(path)
+
+        if callers:
+            out.append("\n## Called by")
+            out.extend(f"- {path}:{line}" for path, line in callers)
 
         if deps:
             out.append("\n## Depends on (local imports)")
