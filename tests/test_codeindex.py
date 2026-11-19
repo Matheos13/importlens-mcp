@@ -60,6 +60,30 @@ def test_symbol_resolves_to_correct_file(fake_repo):
     assert idx.symbol_to_paths["run"] == {"main.py"}
 
 
+def test_method_symbols_resolve_by_class_and_bare_name(tmp_path):
+    (tmp_path / "risk.py").write_text(textwrap.dedent("""\
+        class RiskManager:
+            def position_size(self):
+                pass
+
+            async def refresh(self):
+                pass
+    """))
+    (tmp_path / "portfolio.py").write_text(textwrap.dedent("""\
+        class Portfolio:
+            def position_size(self):
+                pass
+    """))
+    idx = CodeIndex(str(tmp_path)).build()
+
+    assert idx.find_symbol("RiskManager.position_size") == ["risk.py"]
+    assert idx.find_symbol("Portfolio.position_size") == ["portfolio.py"]
+    assert idx.find_symbol("position_size") == ["portfolio.py", "risk.py"]
+    assert idx.find_symbol("RiskManager.refresh") == ["risk.py"]
+    assert idx.find_symbol("refresh") == ["risk.py"]
+    assert idx.find_symbol("Portfolio.refresh") == []
+
+
 # ---- local imports ----------------------------------------------------------
 
 def test_local_imports(fake_repo):
