@@ -81,6 +81,8 @@ relevant_files("CodeIndex")
 
 Dependents show only the lines that use the symbol (+ a few lines of context), not the whole file. Pass `include_full_dependents=True` to get file paths instead.
 
+Look up a method with `ClassName.method_name` or `method_name`. A bare name can match definitions in multiple files.
+
 ## Quick look without an agent
 
 ```bash
@@ -100,7 +102,7 @@ importlens-mcp: 6 files, 6 modules, 51 symbols, 1021 lines
 ## How it works
 
 1. Walk the repo, skipping the usual noise (`.venv`, `node_modules`, `__pycache__`, …).
-2. Parse each `.py` file with the standard-library `ast` module — top-level functions/classes become *symbols*, `import` statements become *edges*.
+2. Parse each `.py` file with the standard-library `ast` module — top-level functions and classes and their methods become *symbols*, `import` statements become *edges*.
 3. Build two maps: `symbol -> files that define it` and `module -> files that import it`.
 4. Answer queries by walking those maps. No network, no model calls, runs in milliseconds.
 
@@ -136,7 +138,7 @@ Rerun with `python benchmarks/bench.py` (httpx needs `git clone --depth=1 https:
 
 - [ ] call-graph edges (who calls this function), not just imports
 - [ ] respect `.gitignore`
-- [ ] method-level symbols, not just top-level
+- [x] method-level symbols
 - [ ] `tree-sitter` backend for speed on huge repos
 
 ## Contributing
