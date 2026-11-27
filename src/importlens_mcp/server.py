@@ -7,11 +7,18 @@ Tools:
   - project_map      : one-glance summary of the repo
   - relevant_files   : given a symbol, return the files that matter for it
   - file_context     : a file plus its local dependencies, ready to read
+  - reindex          : rebuild the in-memory index after files change
+
+Every tool is read-only: importlens-mcp never writes to, deletes from, or
+reaches outside the repo it indexes. That is declared to clients through MCP
+tool annotations, so agents can auto-approve the calls safely.
 """
 
 from __future__ import annotations
 
 import os
+
+from mcp.types import ToolAnnotations
 
 from .graph import CodeIndex, call_sites, signatures
 
@@ -23,6 +30,38 @@ except ModuleNotFoundError:  # pragma: no cover - depends on installed version
     from mcp.server.fastmcp import FastMCP as _Server      # SDK v1
 
 mcp = _Server("importlens-mcp")
+
+
+def _read_only(title: str) -> ToolAnnotations:
+    """Annotations shared by every importlens-mcp tool.
+
+    - readOnlyHint: tools only read source files; nothing on disk changes.
+    - destructiveHint: nothing is ever deleted or overwritten.
+    - idempotentHint: same arguments + same files on disk -> same result.
+    - openWorldHint: no network, no external services; only the local repo.
+    """
+    return ToolAnnotations(
+        title=title,
+        readOnlyHint=True,
+        destructiveHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+
+
+# Tool name -> human-readable title. Also used by the tests to check that
+# every registered tool is annotated.
+TOOL_TITLES: dict[str, str] = {
+    "project_map": "Project map",
+    "relevant_files": "Relevant files for a symbol",
+    "file_context": "File with local dependencies",
+    "reindex": "Rebuild index",
+}
+
+
+def _tool(name: str):
+    title = TOOL_TITLES[name]
+    return mcp.tool(name=name, title=title, annotations=_read_only(title))
 
 _ROOT = os.environ.get("IMPORTLENS_ROOT", os.getcwd())
 _index: CodeIndex | None = None
@@ -48,7 +87,7 @@ def _read(path: str, max_lines: int | None = 400) -> str:
     return "\n".join(lines)
 
 
-@mcp.tool()
+@_tool("project_map")
 def project_map() -> str:
     """Summarize the Python project: file count, modules, symbols, lines.
 
@@ -71,7 +110,7 @@ def project_map() -> str:
     return "\n".join(lines)
 
 
-@mcp.tool()
+@_tool("relevant_files")
 def relevant_files(
     symbol: str,
     include_source: bool = False,
@@ -151,7 +190,7 @@ def relevant_files(
     return "\n".join(out)
 
 
-@mcp.tool()
+@_tool("file_context")
 def file_context(path: str) -> str:
     """Return a file's source plus the paths of its local dependencies.
 
@@ -173,9 +212,12 @@ def file_context(path: str) -> str:
     return "\n".join(header) + "\n" + _read(path, max_lines=None) + "\n```"
 
 
-@mcp.tool()
+@_tool("reindex")
 def reindex() -> str:
-    """Rebuild the index. Call after you've changed files on disk."""
+    """Rebuild the index. Call after you've changed files on disk.
+
+    Only the in-memory index is rebuilt; no files are written.
+    """
     idx = _get_index(refresh=True)
     s = idx.stats()
     return f"Reindexed: {s['files']} files, {s['symbols']} symbols."

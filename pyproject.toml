@@ -8,7 +8,7 @@ license = { text = "MIT" }
 authors = [{ name = "Matheos", email = "mathaiou.agency@gmail.com" }]
 keywords = ["mcp", "claude-code", "agent", "python", "codebase", "context", "llm"]
 dependencies = [
-    "mcp>=1.2.0",
+    "mcp>=1.10.0",
 ]
 
 [project.scripts]
@@ -20,6 +20,11 @@ Issues = "https://github.com/Matheos13/importlens-mcp/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+
+[tool.pytest.ini_options]
+# benchmarks/agent/hidden_tests run against the benchmark target repo, not this
+# package, so keep them out of the default test run.
+testpaths = ["tests"]
 
 [build-system]
 requires = ["hatchling"]
