@@ -3,6 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/importlens-mcp.svg)](https://pypi.org/project/importlens-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Matheos13/importlens-mcp/blob/main/LICENSE)
 [![CI](https://github.com/Matheos13/importlens-mcp/actions/workflows/tests.yml/badge.svg)](https://github.com/Matheos13/importlens-mcp/actions/workflows/tests.yml)
+[![M8ven Verified](https://m8ven.ai/badge/mcp/matheos13-importlens-mcp-1e4nfl?v=fd5008966036adc53d69850f6285506a&variant=verified)](https://m8ven.ai/mcp/matheos13-importlens-mcp-1e4nfl?s=readme)
 
 **Give your coding agent the right slice of a Python repo in one call.**
 
