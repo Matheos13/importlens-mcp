@@ -38,7 +38,7 @@ def main() -> None:
         defs = idx.find_symbol(symbol)
         callers = idx.callers(symbol) if include_callers else []
         if not defs and not callers:
-            print(f"No top-level definition of `{symbol}` found. "
+            print(f"No definition of `{symbol}` found. "
                   "Try `importlens-mcp map .` to see available symbols.",
                   file=sys.stderr)
             sys.exit(1)

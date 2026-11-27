@@ -3,6 +3,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/importlens-mcp.svg)](https://pypi.org/project/importlens-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/Matheos13/importlens-mcp/blob/main/LICENSE)
 [![CI](https://github.com/Matheos13/importlens-mcp/actions/workflows/tests.yml/badge.svg)](https://github.com/Matheos13/importlens-mcp/actions/workflows/tests.yml)
+[![M8ven Verified](https://m8ven.ai/badge/mcp/matheos13-importlens-mcp-1e4nfl?v=fd5008966036adc53d69850f6285506a&variant=verified)](https://m8ven.ai/mcp/matheos13-importlens-mcp-1e4nfl?s=readme)
 
 **Give your coding agent the right slice of a Python repo in one call.**
 
@@ -43,6 +44,12 @@ Four tools, all returning plain readable text:
 | `file_context(path)` | one file's source plus the paths of its local imports |
 | `reindex` | rebuild after you change files on disk |
 
+All four are **read-only** and declare it through MCP tool annotations
+(`readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`,
+`openWorldHint: false`). Nothing is written to disk, nothing goes over the
+network, and paths that escape the project root (`../`, absolute paths,
+symlinks pointing outside) are refused.
+
 ### Example
 
 Ask your agent *"how does `CodeIndex` fit together?"* and under the hood it calls:
@@ -81,6 +88,8 @@ relevant_files("CodeIndex")
 
 Dependents show only the lines that use the symbol (+ a few lines of context), not the whole file. Pass `include_full_dependents=True` to get file paths instead.
 
+Look up a method with `ClassName.method_name` or `method_name`. A bare name can match definitions in multiple files.
+
 ## Quick look without an agent
 
 ```bash
@@ -112,7 +121,7 @@ Names match their spelling in source. A bare `helper` includes `tools.helper()` 
 ## How it works
 
 1. Walk the repo, skipping the usual noise (`.venv`, `node_modules`, `__pycache__`, …).
-2. Parse each `.py` file with the standard-library `ast` module — top-level functions/classes become *symbols*, `import` statements become *edges*.
+2. Parse each `.py` file with the standard-library `ast` module — top-level functions and classes and their methods become *symbols*, `import` statements become *edges*.
 3. Build two maps: `symbol -> files that define it` and `module -> files that import it`.
 4. Answer queries by walking those maps. No network, no model calls, runs in milliseconds.
 
@@ -148,7 +157,7 @@ Rerun with `python benchmarks/bench.py` (httpx needs `git clone --depth=1 https:
 
 - [x] opt-in, name-based call locations alongside import edges
 - [ ] respect `.gitignore`
-- [ ] method-level symbols, not just top-level
+- [x] method-level symbols
 - [ ] `tree-sitter` backend for speed on huge repos
 
 ## Contributing
