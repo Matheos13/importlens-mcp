@@ -131,6 +131,7 @@ def relevant_files(
     include_source: bool = False,
     include_full_dependents: bool = False,
     include_full_imports: bool = False,
+    include_callers: bool = False,
 ) -> str:
     """Find the files that matter for a given function, class, or method.
 
@@ -147,17 +148,22 @@ def relevant_files(
             inlining the call sites where the symbol is used.
         include_full_imports: if true, list local import paths instead of
             inlining their signatures.
+        include_callers: if true, include AST call locations matched by name.
+            Dotted names match the spelling in the source; receiver types and
+            import aliases are not inferred.
     """
     idx = _get_index()
     defs = idx.find_symbol(symbol)
-    if not defs:
+    callers = idx.callers(symbol) if include_callers else []
+    if not defs and not callers:
         return (f"No definition of `{symbol}` found. "
                 "Try project_map to see available symbols.")
 
     out = [f"# Relevant files for `{symbol}`", ""]
     seen: set[str] = set()
 
-    out.append("## Defined in")
+    if defs:
+        out.append("## Defined in")
     for path in defs:
         out.append(f"- {path}")
         seen.add(path)
@@ -183,6 +189,10 @@ def relevant_files(
                     out.append(f"- {path}")
             seen.add(path)
 
+    if callers:
+        out.append("\n## Called by")
+        out.extend(f"- {path}:{line}" for path, line in callers)
+
     if deps:
         out.append("\n## Depends on (local imports)")
         if not include_full_imports:
@@ -197,7 +207,7 @@ def relevant_files(
                 else:
                     out.append(f"- {path}")
 
-    if include_source:
+    if include_source and defs:
         out.append("\n## Source of defining files")
         for path in defs:
             out.append(f"\n### {path}\n```python\n{_read(path)}\n```")

@@ -134,7 +134,8 @@ def test_input_schemas_mark_required_args():
 
 def test_relevant_files_flags_default_to_false():
     props = _schema(_list_tools()["relevant_files"])["properties"]
-    for flag in ("include_source", "include_full_dependents", "include_full_imports"):
+    for flag in ("include_source", "include_full_dependents", "include_full_imports",
+                 "include_callers"):
         assert props[flag]["default"] is False
 
 

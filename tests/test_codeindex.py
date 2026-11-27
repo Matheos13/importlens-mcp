@@ -120,6 +120,60 @@ def test_stats(fake_repo):
 
 # ---- call_sites -------------------------------------------------------------
 
+def test_callers_index_executable_calls_with_sorted_locations(tmp_path):
+    (tmp_path / "z.py").write_text(textwrap.dedent("""\
+        from tools import helper
+        helper(); helper()
+        value = helper
+        text = "helper()"
+        # helper()
+        async def run():
+            await tools.helper()
+            factory().helper()
+        @helper()
+        def decorated():
+            return helper()
+    """))
+    (tmp_path / "a.py").write_text("package.tools.helper()\n")
+    idx = CodeIndex(str(tmp_path)).build()
+
+    assert idx.callers("helper") == [
+        ("a.py", 1), ("z.py", 2), ("z.py", 7), ("z.py", 8),
+        ("z.py", 9), ("z.py", 11),
+    ]
+    assert idx.callers("tools.helper") == [("z.py", 7)]
+    assert idx.callers("package.tools.helper") == [("a.py", 1)]
+    assert idx.callers("factory") == [("z.py", 8)]
+    assert idx.callers("absent") == []
+
+
+def test_callers_do_not_guess_names_for_dynamic_callees(tmp_path):
+    (tmp_path / "calls.py").write_text(
+        "handlers['helper']()\ngetattr(service, 'helper')()\n"
+    )
+    idx = CodeIndex(str(tmp_path)).build()
+    assert idx.callers("helper") == []
+    assert idx.callers("getattr") == [("calls.py", 2)]
+
+
+def test_callers_rebuild_replaces_calls_in_changed_files(tmp_path):
+    source = tmp_path / "calls.py"
+    source.write_text("before()\n")
+    idx = CodeIndex(str(tmp_path)).build()
+    source.write_text("after()\n")
+    idx.build()
+    assert idx.callers("before") == []
+    assert idx.callers("after") == [("calls.py", 1)]
+    source.unlink()
+    idx.build()
+    assert idx.callers("after") == []
+
+
+def test_callers_handle_invalid_python(tmp_path):
+    (tmp_path / "broken.py").write_text("helper(\n")
+    assert CodeIndex(str(tmp_path)).build().callers("helper") == []
+
+
 def test_call_sites_finds_usage(fake_repo):
     snippet = call_sites(str(fake_repo), "main.py", "helper")
     assert "helper" in snippet
@@ -320,6 +374,56 @@ def test_file_context_returns_full_source(tmp_path):
 
 
 # ---- CLI: importlens-mcp map ------------------------------------------------
+
+def test_relevant_files_callers_are_opt_in(fake_repo, monkeypatch):
+    import importlens_mcp.server as srv
+    monkeypatch.setattr(srv, "_ROOT", str(fake_repo))
+    monkeypatch.setattr(srv, "_index", None)
+
+    assert "## Called by" not in srv.relevant_files("helper")
+    result = srv.relevant_files("helper", include_callers=True)
+    assert "## Called by\n- main.py:4" in result
+    assert "## Called by" not in srv.relevant_files("Config", include_callers=True)
+
+
+@pytest.mark.parametrize("args", [
+    ["relevant", "helper", "--include-callers"],
+    ["relevant", "--include-callers", "helper"],
+])
+def test_relevant_cli_exposes_callers(fake_repo, args):
+    result = subprocess.run(
+        [sys.executable, "-m", "importlens_mcp", *args],
+        cwd=fake_repo, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "## Called by\n- main.py:4" in result.stdout
+
+
+def test_relevant_cli_default_stays_compact(fake_repo):
+    result = subprocess.run(
+        [sys.executable, "-m", "importlens_mcp", "relevant", "helper"],
+        cwd=fake_repo, capture_output=True, text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "## Called by" not in result.stdout
+
+
+def test_callers_can_be_queried_without_a_local_definition(tmp_path, monkeypatch):
+    import importlens_mcp.server as srv
+    (tmp_path / "consumer.py").write_text("service.position_size()\n")
+    monkeypatch.setattr(srv, "_ROOT", str(tmp_path))
+    monkeypatch.setattr(srv, "_index", None)
+    result = srv.relevant_files("position_size", include_callers=True, include_source=True)
+    assert "## Called by\n- consumer.py:1" in result
+    assert "## Defined in" not in result
+    assert "## Source of defining files" not in result
+    cli = subprocess.run(
+        [sys.executable, "-m", "importlens_mcp", "relevant", "position_size", "--include-callers"],
+        cwd=tmp_path, capture_output=True, text=True,
+    )
+    assert cli.returncode == 0, cli.stderr
+    assert "## Called by\n- consumer.py:1" in cli.stdout
+
 
 def test_map_cli_runs(fake_repo):
     result = subprocess.run(
