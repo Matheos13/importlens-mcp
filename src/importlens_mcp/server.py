@@ -74,8 +74,23 @@ def _get_index(refresh: bool = False) -> CodeIndex:
     return _index
 
 
+def _inside_root(path: str) -> str | None:
+    """Resolve `path` against the project root; None if it escapes the root.
+
+    Blocks `../` traversal, absolute paths, and symlinks pointing outside the
+    repo, so the read-only tools can only ever see the indexed project.
+    """
+    root = os.path.realpath(_ROOT)
+    abspath = os.path.realpath(os.path.join(root, path))
+    if os.path.commonpath([root, abspath]) != root:
+        return None
+    return abspath
+
+
 def _read(path: str, max_lines: int | None = 400) -> str:
-    abspath = os.path.join(_ROOT, path)
+    abspath = _inside_root(path)
+    if abspath is None:
+        return f"[refusing to read {path}: outside the project root]"
     try:
         with open(abspath, "r", encoding="utf-8") as fh:
             lines = fh.read().splitlines()
