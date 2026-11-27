@@ -43,6 +43,12 @@ Four tools, all returning plain readable text:
 | `file_context(path)` | one file's source plus the paths of its local imports |
 | `reindex` | rebuild after you change files on disk |
 
+All four are **read-only** and declare it through MCP tool annotations
+(`readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`,
+`openWorldHint: false`). Nothing is written to disk, nothing goes over the
+network, and paths that escape the project root (`../`, absolute paths,
+symlinks pointing outside) are refused.
+
 ### Example
 
 Ask your agent *"how does `CodeIndex` fit together?"* and under the hood it calls:
